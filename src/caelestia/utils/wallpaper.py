@@ -158,7 +158,7 @@ def get_colours_for_wall(wall: Path | str, no_smart: bool) -> None:
 
 def convert_gif(wall: Path) -> Path:
     cache = wallpapers_cache_dir / compute_hash(wall)
-    output_path = cache / "first_frame.jpg"
+    output_path = cache / "first_frame.png"
 
     if not output_path.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,16 +169,14 @@ def convert_gif(wall: Path) -> Path:
                 pass
 
             img = img.convert("RGB")
-            width, height = img.size
-            img = img.resize((int(width * 0.5), int(height * 0.5)), Image.Resampling.LANCZOS)
-            img.save(output_path, "JPEG", quality=85)
+            img.save(output_path, "PNG")
 
     return output_path
 
 
 def convert_video(wall: Path) -> Path:
     cache = wallpapers_cache_dir / compute_hash(wall)
-    output_path = cache / "first_frame.jpg"
+    output_path = cache / "first_frame.png"
 
     if not output_path.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -187,8 +185,7 @@ def convert_video(wall: Path) -> Path:
             "-ss", "00:00:00.5",
             "-i", str(wall),
             "-vframes", "1",
-            "-vf", "scale=trunc(iw*0.5)*2:trunc(ih*0.5)*2",
-            "-q:v", "5",
+            "-q:v", "2",
             str(output_path)
         ]
         try:
