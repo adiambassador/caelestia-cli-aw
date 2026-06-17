@@ -206,7 +206,7 @@ def _process_video_thumb(file_path, videothumbs_dir) -> None:
     from pathlib import Path
     import subprocess
     
-    # We need djb2_hash which is defined at module level
+    # djb2_hash which is defined at module level
     def _djb2(s: str) -> str:
         h = 5381
         for char in s:
@@ -265,13 +265,13 @@ def extract_all_video_thumbs() -> None:
             if file_path.suffix.lower() in video_extensions:
                 tasks.append(file_path)
 
-    # Use ThreadPoolExecutor to run ffmpeg in parallel, reducing time from 35s to ~1.5s
+    # ThreadPoolExecutor to run ffmpeg in parallel
     with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
         for file_path in tasks:
             executor.submit(_process_video_thumb, file_path, videothumbs_dir)
 
 def set_wallpaper(wall: Path, no_smart: bool) -> None:
-    # Make path absolute
+    
     wall = Path(wall).resolve()
 
     if not is_valid_image(wall) and not is_video(wall):

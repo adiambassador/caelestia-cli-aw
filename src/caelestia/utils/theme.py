@@ -221,13 +221,11 @@ def sync_papirus_colors(hex_color: str) -> None:
     g = int(hex_color[2:4], 16)
     b = int(hex_color[4:6], 16)
 
-    # Brightness and saturation
     max_val = max(r, g, b)
     min_val = min(r, g, b)
     brightness = max_val
     saturation = 0 if max_val == 0 else ((max_val - min_val) * 100) // max_val
 
-    # Low saturation = grayscale
     if saturation < 20:
         if brightness < 85:
             color = "black"
@@ -235,7 +233,6 @@ def sync_papirus_colors(hex_color: str) -> None:
             color = "grey"
         else:
             color = "white"
-    # Medium-low saturation with high brightness = pale variants
     elif saturation < 60 and brightness > 180:
         use_pale = True
         color = _determine_hue_color(r, g, b, brightness, use_pale)
@@ -255,13 +252,11 @@ def sync_papirus_colors(hex_color: str) -> None:
 
 def _determine_hue_color(r: int, g: int, b: int, brightness: int, use_pale: bool) -> str:
     if b > r and b > g:
-        # Blue dominant
         r_ratio = (r * 100) // b if b > 0 else 0
         g_ratio = (g * 100) // b if b > 0 else 0
         rg_diff = abs(r - g)
 
         if r_ratio > 70 and g_ratio > 70:
-            # Both R and G high relative to B = light blue/periwinkle
             if rg_diff < 15:
                 return "blue"
             elif r > g:
@@ -275,9 +270,7 @@ def _determine_hue_color(r: int, g: int, b: int, brightness: int, use_pale: bool
         else:
             return "blue"
     elif r > g and r > b:
-        # Red dominant
         if g > b + 30:
-            # Orange/yellow-ish/brown
             rg_ratio = (g * 100) // r if r > 0 else 0
             if use_pale:
                 if rg_ratio > 70 and brightness < 220:
@@ -294,7 +287,6 @@ def _determine_hue_color(r: int, g: int, b: int, brightness: int, use_pale: bool
         else:
             return "pink" if use_pale else "red"
     elif g > r and g > b:
-        # Green dominant
         if r > b + 30:
             return "yellow"
         else:
@@ -361,7 +353,6 @@ def apply_chromium(colours: dict[str, str]) -> None:
             print(f"Unable to create {policy_dir} directory")
             continue
 
-        # Use tee instead of atomic_write cause we need sudo
         subprocess.run(
             ["sudo", "-n", "tee", str(policy_dir / "caelestia.json")],
             input=json.dumps({"BrowserThemeColor": theme_color, "BrowserColorScheme": "device"}),
@@ -377,9 +368,7 @@ def apply_chromium(colours: dict[str, str]) -> None:
 
 
 def apply_zed(colours: dict[str, str], mode: str) -> None:
-    theme_path = config_dir / "zed/themes/caelestia.json"
-    # Zed's file watcher does not detect changes through symlinks,
-    # so resolve to a regular file before writing
+    theme_path = config_dir / "zed/themes/caelestia.json
     if theme_path.is_symlink():
         theme_path.unlink()
 
@@ -406,7 +395,7 @@ def apply_user_templates(colours: dict[str, str], mode: str) -> None:
 
 
 def apply_colours(colours: dict[str, str], mode: str) -> None:
-    # Use file-based lock to prevent concurrent theme changes
+    # file-based lock to prevent concurrent theme changes
     lock_file = c_state_dir / "theme.lock"
     c_state_dir.mkdir(parents=True, exist_ok=True)
 
