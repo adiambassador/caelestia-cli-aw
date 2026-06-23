@@ -110,7 +110,7 @@ def get_smart_opts(wall: Path, cache: Path) -> dict:
     return opts
 
 
-def get_video_thumb_or_frame(wall: Path) -> Path:
+def get_video_thumb(wall: Path) -> Path:
     from caelestia.utils.paths import c_cache_dir
     h = djb2_hash(str(wall.resolve()))
     fast_thumb = c_cache_dir / "videothumbs" / f"{h}.jpg"
@@ -124,7 +124,7 @@ def get_colours_for_wall(wall: Path | str, no_smart: bool) -> None:
     scheme = get_scheme()
 
     if is_video(wall):
-        wall_cache = get_video_thumb_or_frame(wall)
+        wall_cache = get_video_thumb(wall)
     elif wall.suffix.lower() == ".gif":
         wall_cache = convert_gif(wall)
     else:
@@ -279,7 +279,7 @@ def set_wallpaper(wall: Path, no_smart: bool) -> None:
 
     # Use gif's 1st frame or video's extracted frame for thumb only
     if is_video(wall):
-        wall_cache = get_video_thumb_or_frame(wall)
+        wall_cache = get_video_thumb(wall)
     elif wall.suffix.lower() == ".gif":
         wall_cache = convert_gif(wall)
     else:
