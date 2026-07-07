@@ -245,40 +245,17 @@ def extract_all_video_thumbs() -> None:
 
             if not thumb_path.exists():
                 extract_thumbnail(resolved_path, thumb_path)
-                nonlocal extracted_any
-                with write_lock:
-                    extracted_any = True
+            
+            with write_lock:
+                with ready_file.open("a") as f:
+                    f.write(f"{str(resolved_path)}\n")
         except Exception:
             pass
 
     video_extensions = {".mp4", ".webm", ".mkv"}
     videos_to_process = []
     
-    # MD5 Deduplication: Scan and remove duplicate video files
-    seen_hashes = {}
-    animated_dir = wallpapers_dir / "Animated"
-    
-    if animated_dir.exists():
-        files = []
-        for root_dir, _, filenames in os.walk(animated_dir):
-            for name in filenames:
-                p = Path(root_dir) / name
-                if p.suffix.lower() in video_extensions:
-                    files.append(p)
-                    
-        # Sort by modification time (keep oldest)
-        files.sort(key=lambda x: x.stat().st_mtime)
-        
-        for p in files:
-            h = get_hash(p)
-            if not h: continue
-            if h in seen_hashes:
-                try: 
-                    p.unlink()
-                except Exception: 
-                    pass
-            else:
-                seen_hashes[h] = p
+    # Removed slow MD5 deduplication here
 
     for root_dir, _, files in os.walk(wallpapers_dir):
         for file in files:
@@ -290,8 +267,7 @@ def extract_all_video_thumbs() -> None:
         for _ in executor.map(process_video, videos_to_process):
             pass
 
-    if extracted_any:
-        ready_file.touch()
+    # Removed unused extracted_any touch logic
 
 
 def set_wallpaper(wall: Path, no_smart: bool) -> None:
