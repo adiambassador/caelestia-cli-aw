@@ -249,8 +249,8 @@ def extract_all_video_thumbs() -> None:
             with write_lock:
                 with ready_file.open("a") as f:
                     f.write(f"{str(resolved_path)}\n")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"ERROR: {e}")
 
     video_extensions = {".mp4", ".webm", ".mkv"}
     videos_to_process = []
