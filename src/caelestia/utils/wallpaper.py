@@ -42,21 +42,31 @@ def djb2_hash(s: str) -> str:
 
 def extract_thumbnail(video_path: Path, output_path: Path):
     try:
+        duration = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(video_path)],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+        duration = float(duration) if duration else 0
+
+        # Seek to 30% into the clip, capped so we never land past the end
+        seek = max(0.1, min(duration * 0.3, duration - 0.1)) if duration > 0.3 else 0.1
+        
         subprocess.run(
             [
                 "ffmpeg", "-y",
+                "-ss", str(seek),
                 "-i", str(video_path),
-                "-ss", "00:00:01",
                 "-vframes", "1",
                 "-vf", "scale=-1:720",
                 "-q:v", "2",
+                "-update", "1",
                 str(output_path)
             ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         pass
 
 
@@ -243,7 +253,17 @@ def extract_all_video_thumbs() -> None:
             h = djb2_hash(str(resolved_path))
             thumb_path = videothumbs_dir / f"{h}.jpg"
 
-            if not thumb_path.exists():
+            # Smart check: extract if missing OR if the existing file is a low-res placeholder
+            should_extract = True
+            if thumb_path.exists():
+                try:
+                    with Image.open(thumb_path) as t_img:
+                        if t_img.width >= 1280:  # If it's already 720p, skip it
+                            should_extract = False
+                except Exception:
+                    pass
+            
+            if should_extract:
                 extract_thumbnail(resolved_path, thumb_path)
             
             with write_lock:
