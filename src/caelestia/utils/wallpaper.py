@@ -26,7 +26,7 @@ from caelestia.utils.theme import apply_colours
 
 
 def is_valid_image(path: Path) -> bool:
-    return path.is_file() and path.suffix in [".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif"]
+    return path.is_file() and path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", ".gif"]
 
 
 def is_video(path: Path) -> bool:
@@ -42,21 +42,31 @@ def djb2_hash(s: str) -> str:
 
 def extract_thumbnail(video_path: Path, output_path: Path):
     try:
+        duration = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(video_path)],
+            capture_output=True, text=True, check=True
+        ).stdout.strip()
+        duration = float(duration) if duration else 0
+
+        # Seek to 30% into the clip, capped so we never land past the end
+        seek = max(0.1, min(duration * 0.3, duration - 0.1)) if duration > 0.3 else 0.1
+        
         subprocess.run(
             [
                 "ffmpeg", "-y",
+                "-ss", str(seek),
                 "-i", str(video_path),
-                "-ss", "00:00:01",
                 "-vframes", "1",
                 "-vf", "scale=-1:720",
                 "-q:v", "2",
+                "-update", "1",
                 str(output_path)
             ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         pass
 
 
@@ -95,7 +105,7 @@ def get_thumb(wall: Path, cache: Path) -> Path:
     if not thumb.exists():
         with Image.open(wall) as img:
             img = img.convert("RGB")
-            img.thumbnail((128, 128), Image.Resampling.NEAREST)
+            img.thumbnail((128, 128), Image.Resampling.BOX)
             thumb.parent.mkdir(parents=True, exist_ok=True)
             img.save(thumb, "JPEG")
 
@@ -114,7 +124,7 @@ def get_smart_opts(wall: Path, cache: Path) -> dict:
 
     with Image.open(get_thumb(wall, cache)) as img:
         opts["variant"] = get_variant(img)
-        img.thumbnail((1, 1), Image.Resampling.LANCZOS)
+        img.thumbnail((1, 1), Image.Resampling.BOX)
 
         # Cast the pixel to a tuple of 3 integers to safely unpack it
         pixel = cast(tuple[int, int, int], img.getpixel((0, 0)))
@@ -164,7 +174,7 @@ def get_colours_for_wall(wall: Path | str, no_smart: bool) -> None:
 
 def convert_gif(wall: Path) -> Path:
     cache = wallpapers_cache_dir / compute_hash(wall)
-    output_path = cache / "first_frame.png"
+    output_path = cache / "first_frame.jpg"
 
     if not output_path.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -175,7 +185,7 @@ def convert_gif(wall: Path) -> Path:
                 pass
 
             img = img.convert("RGB")
-            img.save(output_path, "PNG")
+            img.save(output_path, "JPEG", quality=90)
 
     return output_path
 
@@ -187,25 +197,50 @@ def convert_video(wall: Path) -> Path:
         return fast_thumb
     
     cache = wallpapers_cache_dir / compute_hash(wall)
-    output_path = cache / "first_frame.png"
+    output_path = cache / "first_frame.jpg"
     
     if not output_path.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
+            duration_proc = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(wall)],
+                capture_output=True, text=True, timeout=1.0
+            )
+            duration_str = duration_proc.stdout.strip()
+            duration = float(duration_str) if duration_str else 0.0
+
+            seek_time = max(1.0, min(duration * 0.2, 4.0)) if duration > 1.0 else 0.2
+
             subprocess.run(
                 [
                     "ffmpeg", "-y",
+                    "-ss", f"{seek_time:.2f}",
                     "-i", str(wall),
-                    "-ss", "00:00:01",
                     "-vframes", "1",
+                    "-q:v", "3",
                     str(output_path)
                 ],
                 check=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
-        except subprocess.CalledProcessError:
-            pass
+        except Exception:
+            try:
+                subprocess.run(
+                    [
+                        "ffmpeg", "-y",
+                        "-ss", "00:00:01",
+                        "-i", str(wall),
+                        "-vframes", "1",
+                        "-q:v", "3",
+                        str(output_path)
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
             
     return output_path
 
@@ -214,7 +249,6 @@ def extract_all_video_thumbs() -> None:
     from caelestia.utils.paths import wallpapers_dir, c_cache_dir
     from concurrent.futures import ThreadPoolExecutor
     import threading
-    import hashlib
 
     videothumbs_dir = c_cache_dir / "videothumbs"
     videothumbs_dir.mkdir(parents=True, exist_ok=True)
@@ -227,23 +261,23 @@ def extract_all_video_thumbs() -> None:
     extracted_any = False
     write_lock = threading.Lock()
     
-    def get_hash(file_path: Path) -> str | None:
-        h = hashlib.md5()
-        try:
-            with open(file_path, 'rb') as f:
-                for chunk in iter(lambda: f.read(8192), b''):
-                    h.update(chunk)
-            return h.hexdigest()
-        except Exception:
-            return None
-
     def process_video(file_path: Path):
         try:
             resolved_path = file_path.resolve()
             h = djb2_hash(str(resolved_path))
             thumb_path = videothumbs_dir / f"{h}.jpg"
 
-            if not thumb_path.exists():
+            # Smart check: extract if missing OR if the existing file is a low-res placeholder
+            should_extract = True
+            if thumb_path.exists():
+                try:
+                    with Image.open(thumb_path) as t_img:
+                        if t_img.height >= 500:
+                            should_extract = False
+                except Exception:
+                    pass
+            
+            if should_extract:
                 extract_thumbnail(resolved_path, thumb_path)
             
             with write_lock:
