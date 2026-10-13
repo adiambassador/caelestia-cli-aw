@@ -1,3 +1,78 @@
+# Caelestia-AW CLI
+
+A feature-focused fork of [Caelestia CLI](https://github.com/caelestia-dots/cli) that provides backend support for animated wallpaper functionality in [Caelestia-AW Shell](https://github.com/AdiAmbassador/caelestia-shell-aw).
+
+------
+
+## Overview
+
+This fork extends the upstream Caelestia CLI with the backend plumbing required to support video wallpapers. All original commands, configuration, and behaviour remain identical to upstream. The changes here exist solely to support the animated wallpaper pipeline implemented in Caelestia-AW Shell.
+
+------
+
+## What's Changed
+
+| File                          | Summary                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| `utils/wallpaper.py`          | Core of the animated wallpaper backend. Rewritten with `concurrent.futures` multithreading for non-blocking thumbnail generation. FFmpeg seeks to 15% of the video timeline for a representative frame, with proportional downscaling and high-compression JPEG output for fast cache reads. |
+| `utils/hypr.py`               | Removed obsolete, unused Hyprland IPC bindings.              |
+| `utils/theme.py`              | Adjusted theme application pipeline to correctly inject dynamic secondary colors extracted from wallpapers. |
+| `utils/material/generator.py` | Tuned the Material You palette extractor to accurately scrape the secondary color role for dynamic UI theming. |
+| `parser.py`                   | Registered new argument flags for wallpaper handling required by the video pipeline. |
+| `subcommands/wallpaper.py`    | Minor syntax standardization.                                |
+
+------
+
+## Added Features
+
+- **thumbnail cache** — thumbnails are generated once per video. Uses djb2 hashing of the absolute file path as the cache key, stored in `~/.cache/caelestia/videothumbs/`
+- **First-frame extraction** — ffmpeg seeks to 15% length and extracts one frame per video, resized to 256×144 JPEG at 80% quality via Pillow.
+- **Video-aware color palette generation** — when `caelestia wallpaper --file` receives a video path, it automatically pulls colors from the cached thumbnail instead of running ffmpeg again, keeping Material You theme transitions fast.
+- **Video file detection** — `.mp4`, `.webm`, `.mkv`, `.gif` are detected and routed through the video pipeline automatically.
+
+------
+
+## Requirements
+
+In addition to upstream dependencies:
+
+- `ffmpeg`
+- `python-pillow`
+
+On Arch Linux:
+
+```bash
+sudo pacman -S ffmpeg python-pillow
+```
+
+------
+
+## Installation
+
+For most users, installation is handled automatically by the [Caelestia-AW patch script](https://github.com/AdiAmbassador/caelestia-aw).
+
+**Manual installation** (development only):
+
+```bash
+git clone https://github.com/AdiAmbassador/caelestia-cli-aw
+cd caelestia-cli-aw
+pip install -e . --break-system-packages
+```
+
+------
+
+## Credits & Upstream
+
+Based on [caelestia-dots/cli](https://github.com/caelestia-dots/cli). All original architecture, commands, configuration system, and implementation belong to the Caelestia contributors. The modifications in this fork are focused solely on the animated wallpaper feature.
+
+The original Caelestia CLI documentation continues below.
+
+------
+
+
+
+
+
 # caelestia-cli
 
 The main control script for the Caelestia dotfiles.
@@ -171,15 +246,12 @@ Custom user templates can be defined in `~/.config/caelestia/templates/`.
 `{{ <color>.<format> }}`
 
 - `<color>` is a theme color role derived from the Material You color system (e.g. `primary`, `secondary`, `background`)
-- `<format>` is the output format: `hex`, `rgb`, `hsl`, or a single channel (`red`, `green`, `blue`, `hue`, `saturation`, `lightness`)
+- `<format>` is the output format: `hex` or `rgb`
 
 #### Examples
 
 - `{{ primary.hex }}` outputs `3f4ba2`
 - `{{ primary.rgb }}` outputs `rgb(193, 132, 207)`
-- `{{ primary.red }}` outputs `193`
-- `{{ primary.hsl }}` outputs `hsl(268,41%,66%)`
-- `{{ primary.hue }}` outputs `268`
 
 Output files are written to `~/.local/state/caelestia/theme/`. You can symlink them to your desired locations.
 
