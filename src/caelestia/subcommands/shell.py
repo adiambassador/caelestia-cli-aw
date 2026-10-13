@@ -41,6 +41,17 @@ class Command:
         return subprocess.check_output(["qs", "-c", "caelestia", *args], text=True)
 
     def start_shell(self) -> None:
+        # Hardware Decoder Injection
+        try:
+            from pathlib import Path
+            decoder_file = Path(os.path.expanduser("~/.cache/caelestia/hwDecoder.txt"))
+            if decoder_file.exists():
+                decoder = decoder_file.read_text().strip()
+                if decoder and decoder.lower() != "auto":
+                    os.environ["QT_FFMPEG_DECODING_HW_DEVICE_TYPES"] = decoder
+        except Exception:
+            pass
+
         args = ["qs", "-c", "caelestia", "-n"]
         if self.args.log_rules:
             args.extend(["--log-rules", self.args.log_rules])
